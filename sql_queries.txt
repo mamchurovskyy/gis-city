@@ -1,0 +1,134 @@
+CREATE TABLE IF NOT EXISTS public.objects_centroids (
+    id_centroid serial NOT NULL,
+    centroid_geom geometry NOT NULL,
+    centroid_text text NOT NULL,
+    id_building bigint NOT NULL,
+    CONSTRAINT buildings_centroid_fk FOREIGN KEY (id_building)
+        REFERENCES public.buildings (gid) MATCH SIMPLE
+        ON UPDATE CASCADE
+        ON DELETE CASCADE
+);
+
+CREATE INDEX centroids_geom_index ON public.objects_centroids
+USING GIST (centroid_geom);
+
+----------------------------------------------------------------------
+
+CREATE OR REPLACE PROCEDURE get_centroids() 
+AS $body$
+BEGIN
+	INSERT INTO objects_centroids(centroid_geom, centroid_text, 
+id_building)
+	SELECT ST_Centroid(geom), ST_AsText(ST_Centroid(geom)), gid 
+	FROM buildings;
+END;
+$body$
+LANGUAGE plpgsql;
+
+CALL get_centroids();
+
+----------------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.route_between_objects
+(
+    route geometry NOT NULL,
+    distance double precision
+);
+
+----------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION get_object_centre_geometry(point geometry) 
+RETURNS geometry
+AS $body$
+BEGIN
+	RETURN (SELECT oc.centroid_geom
+	  FROM buildings b, objects_centroids oc
+	  WHERE b.gid = oc.id_building AND ST_Contains(b.geom, point));
+END;
+$body$
+LANGUAGE plpgsql;
+
+----------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION build_route_geometry(points_string text)
+RETURNS geometry
+AS $body$
+DECLARE
+    centre geometry;
+    geom_point geometry;
+    geom_points geometry[] := ARRAY(
+        SELECT ST_PointN(column1, generate_series(1, ST_NPoints(column1)))
+        FROM (VALUES(ST_GeomFromText(points_string, 4326))) AS foo);            
+    centre_points geometry[];
+BEGIN
+    FOREACH geom_point IN ARRAY geom_points LOOP
+        centre := get_object_centre_geometry(geom_point);
+            IF centre IS NOT NULL THEN
+                centre_points := centre_points || centre;
+            ELSE
+                RAISE EXCEPTION 'Точка вне объекта!';
+            END IF;
+    END LOOP;
+  
+    RETURN (SELECT ST_MakeLine(centre_points));
+END;
+$body$
+LANGUAGE 'plpgsql';
+
+----------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION clean_before_insert() RETURNS TRIGGER AS $$
+BEGIN     
+	DELETE FROM route_between_objects;
+	RETURN NEW;
+END;
+$$
+LANGUAGE plpgsql;
+
+CREATE TRIGGER clear_table_trigger 
+BEFORE INSERT ON route_between_objects
+FOR EACH ROW EXECUTE PROCEDURE clean_before_insert();
+
+----------------------------------------------------------------------
+
+CREATE OR REPLACE FUNCTION calculate_distance() RETURNS TRIGGER
+AS $body$
+BEGIN
+	UPDATE route_between_objects rbo
+  	SET distance = ST_Length(NEW.route);
+  	RETURN NEW;
+END;
+$body$
+LANGUAGE plpgsql;
+
+CREATE TRIGGER distance_trigger AFTER INSERT ON route_between_objects
+FOR EACH ROW EXECUTE PROCEDURE calculate_distance();
+
+----------------------------------------------------------------------
+
+CREATE OR REPLACE PROCEDURE build_route_through_several_points
+(points_string text) AS $body$
+DECLARE
+  centre geometry;
+  geom_point geometry;
+  geom_points geometry[] := ARRAY(
+   SELECT ST_PointN(column1, generate_series(1, ST_NPoints(column1)))
+   FROM (VALUES(ST_GeomFromText(points_string, 4326))) AS foo);            
+  centre_points geometry[];
+BEGIN
+	FOREACH geom_point IN ARRAY geom_points LOOP
+		centre := get_object_centre(geom_point);
+      	IF centre IS NOT NULL THEN
+          	centre_points := centre_points || centre;
+        ELSE
+            RAISE EXCEPTION 'Точка вне объекта!';
+        END IF;
+  END LOOP;
+  
+  INSERT INTO route_between_objects(route)
+    SELECT ST_MakeLine(centre_points);
+END;
+$body$
+LANGUAGE plpgsql;
+
+----------------------------------------------------------------------
