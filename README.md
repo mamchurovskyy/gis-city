@@ -14,7 +14,8 @@
 - PostgreSQL 14;
 - [PostGIS](https://postgis.net/) extension for PostgreSQL;
 - Jupyter Notebook;
-- [ipyleaflet](<https://ipyleaflet.readthedocs.io/en/master/>) for interactive map in Jupyter Notebook.
+- [ipyleaflet](<https://ipyleaflet.readthedocs.io/en/master/>) for interactive map in Jupyter Notebook;
+- QGIS (open source geographic information system).
 
 ---
 
@@ -22,7 +23,7 @@
 
 - Created a new PostgreSQL user and a new database;
 - Enabled the `PostGIS` extension for the database;
-- Imported shapefiles into the newly created database;
+- Imported shapefiles into the newly created database using QGIS;
 - Created a stored procedure and a table to get and store buildings centers, respectively;
 - Created a stored function to build the shortest route between two buildings that are specified by the user as two arbitrary points;
 - Created a stored procedure to build the shortest route through an arbitrary number of buildings that are specified by the user;
