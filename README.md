@@ -72,12 +72,14 @@
     jupyter nbextension enable --py --sys-prefix ipyleaflet
     ```
 
-5. Create new PostgreSQL DB using `.backup` file;
+5. Create new PostgreSQL database using `.backup` file;
 
-6. Start Jupyter Notebook:
+6. Create `.env` file and add there `DB_NAME`, `DB_USER` and `DB_PASSWORD`;
+
+7. Start Jupyter Notebook:
 
     ``` bash sh shell zsh
     jupyter notebook
     ```
 
-7. Run all cells and have fun =)
+8. Run all cells and have fun =)
